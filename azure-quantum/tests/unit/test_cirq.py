@@ -6,6 +6,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 ##
+import imp
 import mock
 import unittest
 import warnings
@@ -72,6 +73,7 @@ class TestCirq(QuantumTestBase):
         target_names = [t.name for t in targets]
         assert all([isinstance(t, Target) for t in targets])
         assert "honeywell.hqs-lt-s1-apival" in target_names
+        assert "quantinuum.hqs-lt-s1-apival" in target_names
         assert "ionq.simulator" in target_names
 
     def test_plugins_estimate_cost_cirq_ionq(self):
@@ -174,6 +176,24 @@ class TestCirq(QuantumTestBase):
         assert np.round(cost.estimated_total) == 725.0
 
     @pytest.mark.honeywell
+    def test_plugins_estimate_cost_cirq_quantinuum(self):
+        workspace = self.create_workspace()
+        service = AzureQuantumService(workspace=workspace)
+        cost = service.estimate_cost(
+            program=self._3_qubit_ghz_cirq(),
+            repetitions=100e3,
+            target="quantinuum.hqs-lt-s1-apival"
+        )
+        assert cost.estimated_total == 0.0
+
+        cost = service.estimate_cost(
+            program=self._3_qubit_ghz_cirq(),
+            repetitions=100e3,
+            target="quantinuum.hqs-lt-s1"
+        )
+        assert np.round(cost.estimated_total) == 725.0
+
+    @pytest.mark.honeywell
     @pytest.mark.live_test
     def test_plugins_honeywell_cirq(self):
         with unittest.mock.patch.object(
@@ -224,6 +244,71 @@ class TestCirq(QuantumTestBase):
                     self.get_test_job_id(), program=program)
                 target = service._target_factory.create_target(
                     provider_id="honeywell", name="honeywell.hqs-lt-s1-apival")
+                job_result1 = target._to_cirq_result(
+                    result=job_no_program.results(), param_resolver=ParamResolver({}))
+                job_result2 = target._to_cirq_result(
+                    result=job_with_program.results(), param_resolver=ParamResolver({}))
+                for result in [run_result, job_result1, job_result2]:
+                    assert "q0" in result.measurements
+                    assert "q1" in result.measurements
+                    assert "q2" in result.measurements
+                    assert len(result.measurements["q0"]) == 500
+                    assert len(result.measurements["q1"]) == 500
+                    assert len(result.measurements["q2"]) == 500
+                    assert result.measurements["q0"].sum() == result.measurements["q1"].sum()
+                    assert result.measurements["q1"].sum() == result.measurements["q2"].sum()
+
+    @pytest.mark.honeywell
+    @pytest.mark.live_test
+    def test_plugins_quantinuum_cirq(self):
+        with unittest.mock.patch.object(
+            Job,
+            self.mock_create_job_id_name,
+            return_value=self.get_test_job_id(),
+        ):
+            workspace = self.create_workspace()
+            service = AzureQuantumService(workspace=workspace)
+            program = self._3_qubit_ghz_cirq()
+            try:
+                # Modify the Job.wait_until_completed method
+                # such that it only records once
+                # See: https://github.com/microsoft/qdk-python/issues/118
+                with mock.patch.object(
+                    Job,
+                    "wait_until_completed",
+                    self.mock_wait(Job.wait_until_completed)
+                ):
+                    run_result = service.run(
+                        program=program,
+                        repetitions=500,
+                        target="quantinuum.hqs-lt-s1-apival",
+                        timeout_seconds=60
+                    )
+
+            except TimeoutError as e:
+                # Pass on timeout
+                warnings.warn("Quantinuum execution exceeded timeout. \
+                    Skipping fetching results.")
+                if self.is_playback:
+                    raise e
+
+            except RuntimeError as e:
+                # cirq_ionq currently throws a RuntimeError both if the job 
+                # failed and on timeout.
+                # See: https://github.com/quantumlib/Cirq/issues/4507
+                if 'Job failed' in str(e) or self.is_playback:
+                    warnings.warn(f"Quantinuum job execution failed: {str(e)}")
+                    raise e
+                else:
+                    warnings.warn("Quantinuum execution exceeded timeout. \
+                    Skipping fetching results.")
+
+            else:
+                job_no_program = service.get_job(self.get_test_job_id())
+                job_with_program = service.get_job(
+                    self.get_test_job_id(), program=program)
+                target = service._target_factory.create_target(
+                    provider_id="quantinuum", name="quantinuum.hqs-lt-s1-apival")
                 job_result1 = target._to_cirq_result(
                     result=job_no_program.results(), param_resolver=ParamResolver({}))
                 job_result2 = target._to_cirq_result(

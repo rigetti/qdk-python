@@ -92,11 +92,10 @@ class TestWorkspace(QuantumTestBase):
         targets = ws.get_targets()
         assert None not in targets
         test_targets = set([
-            'honeywell.hqs-lt-s1-apival',
             'ionq.simulator'
         ])
         assert test_targets.issubset(set([t.name for t in targets]))
-    
+
     @pytest.mark.honeywell
     @pytest.mark.live_test
     def test_workspace_get_targets_honeywell(self):
@@ -107,7 +106,18 @@ class TestWorkspace(QuantumTestBase):
             'honeywell.hqs-lt-s1-apival'
         ])
         assert test_targets.issubset(set([t.name for t in targets]))
-    
+
+    @pytest.mark.honeywell
+    @pytest.mark.live_test
+    def test_workspace_get_targets_quantinuum(self):
+        ws = self.create_workspace()
+        targets = ws.get_targets()
+        assert None not in targets
+        test_targets = set([
+            'quantinuum.hqs-lt-s1-apival'
+        ])
+        assert test_targets.issubset(set([t.name for t in targets]))
+
     @pytest.mark.qio
     @pytest.mark.live_test
     def test_workspace_get_targets_qio(self):

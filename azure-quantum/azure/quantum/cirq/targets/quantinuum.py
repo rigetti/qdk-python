@@ -6,7 +6,7 @@ import numpy as np
 
 from typing import TYPE_CHECKING, Any, Dict, Sequence
 
-from azure.quantum.target import Honeywell
+from azure.quantum.target import Quantinuum
 from azure.quantum.cirq.targets.target import Target as CirqTarget
 from azure.quantum.cirq.job import Job as CirqJob
 
@@ -16,8 +16,8 @@ if TYPE_CHECKING:
     from azure.quantum import Job as AzureJob
 
 
-class HoneywellTarget(Honeywell, CirqTarget):
-    """Base class for interfacing with an Honeywell backend in Azure Quantum"""
+class QuantinuumTarget(Quantinuum, CirqTarget):
+    """Base class for interfacing with an Quantinuum backend in Azure Quantum"""
 
     def __init__(
         self,
@@ -25,7 +25,7 @@ class HoneywellTarget(Honeywell, CirqTarget):
         name: str,
         input_data_format: str = "honeywell.openqasm.v1",
         output_data_format: str = "honeywell.quantum-results.v1",
-        provider_id: str = "honeywell",
+        provider_id: str = "quantinuum",
         content_type: str = "application/qasm",
         encoding: str = "",
         **kwargs
