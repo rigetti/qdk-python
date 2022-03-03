@@ -66,7 +66,7 @@ RawData = Union[int, float, List[float]]
 
 
 class Result:
-    """Downloads the data of a completed Job and extracts the """
+    """Downloads the data of a completed Job and extracts the readout values in the correct type."""
 
     def __init__(self, job: Job) -> None:
         """Decode the results of a Job into a RigettiResult"""
