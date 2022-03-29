@@ -47,6 +47,7 @@ class InputParams:
     This **must** be set true if using `Quil-T <https://pyquil-docs.rigetti.com/en/stable/quilt.html>`_.
     """
 
+
 class Rigetti(Target):
     """Rigetti target, defaults to the simulator RigettiTarget.QVM
 
@@ -98,5 +99,8 @@ class Rigetti(Target):
         :rtype: Job
         """
         if isinstance(input_params, InputParams):
-            input_params = asdict(input_params)
+            input_params = {
+                "count": input_params.count,
+                "skipQuilc": input_params.skip_quilc,
+            }
         return super().submit(input_data, name, input_params, **kwargs)
