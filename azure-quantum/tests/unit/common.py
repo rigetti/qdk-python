@@ -66,7 +66,7 @@ class QuantumTestBase(ReplayableTest):
         recording_processors = [
             self._pause_recording_processor,
             regex_replacer,
-            AccessTokenReplacer(),
+            AccessTokenReplacerWithListException(),
             InteractiveAccessTokenReplacer(),
             SubscriptionRecordingProcessor(ZERO_UID),
             AuthenticationMetadataFilter(),
@@ -117,7 +117,10 @@ class QuantumTestBase(ReplayableTest):
             r"jobs/([a-f0-9]+[-]){4}[a-f0-9]+", "jobs/" + ZERO_UID
         )
         regex_replacer.register_regex(
-            r"job-([a-f0-9]+[-]){4}[a-f0-9]+", "job-" + ZERO_UID
+            r"session-([a-f0-9]+[-]){4}[a-f0-9]+", "session-" + ZERO_UID
+        )
+        regex_replacer.register_regex(
+            r"sessions/([a-f0-9]+[-]){4}[a-f0-9]+", "sessions/" + ZERO_UID
         )
         regex_replacer.register_regex(
             r"\d{8}-\d{6}", "20210101-000000"
@@ -360,7 +363,7 @@ class CustomRecordingProcessor(RecordingProcessor):
         self._regexes = []
 
     def register_regex(self, old_regex, new):
-        self._regexes.append((re.compile(pattern=old_regex, 
+        self._regexes.append((re.compile(pattern=old_regex,
                                          flags=re.IGNORECASE | re.MULTILINE),
                              new))
 
@@ -459,6 +462,28 @@ class AuthenticationMetadataFilter(RecordingProcessor):
         if "/.well-known/openid-configuration" in request.uri or "/common/discovery/instance" in request.uri:
             return None
         return request
+
+
+class AccessTokenReplacerWithListException(AccessTokenReplacer):
+    """
+    Replace the access token for service principal authentication in a response body.
+
+    This is customized for responses that return lists.
+    """
+
+    def __init__(self, replacement='fake_token'):
+        self._replacement = replacement
+
+    def process_response(self, response):
+        import json
+        try:
+            body = json.loads(response['body']['string'])
+            if not isinstance(body, list):
+                body['access_token'] = self._replacement
+        except (KeyError, ValueError):
+            return response
+        response['body']['string'] = json.dumps(body)
+        return response
 
 
 class InteractiveAccessTokenReplacer(RecordingProcessor):
