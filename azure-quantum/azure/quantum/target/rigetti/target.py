@@ -49,6 +49,8 @@ class RigettiTarget(str, Enum):
             return 20
         elif target_name == RigettiTarget.ASPEN_M_3.value:
             return 80
+        elif target_name == RigettiTarget.ASPEN_M_3.value:
+            return 80
         else:
             raise ValueError(f"Unknown target {target_name}")
 
