@@ -2,6 +2,8 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 ##
+__all__ = ['MicrosoftEstimatorResult']
+
 from typing import Any, Dict, List, Optional, Union
 
 import json
@@ -17,7 +19,6 @@ class HTMLWrapper:
 
     def _repr_html_(self):
         return self.content
-
 
 class MicrosoftEstimatorResult(dict):
     """
@@ -38,9 +39,10 @@ class MicrosoftEstimatorResult(dict):
             super().__init__(data)
 
             self._is_simple = True
-            self._repr = self._item_result_table()
-            self.summary = HTMLWrapper(self._item_result_summary_table())
-            self.diagram = EstimatorResultDiagram(self.data().copy())
+            if MicrosoftEstimatorResult._is_succeeded(self):
+                self._repr = self._item_result_table()
+                self.summary = HTMLWrapper(self._item_result_summary_table())
+                self.diagram = EstimatorResultDiagram(self.data().copy())
 
         elif isinstance(data, list):
             super().__init__({idx: MicrosoftEstimatorResult(item_data)
@@ -62,6 +64,9 @@ class MicrosoftEstimatorResult(dict):
             # Add plot function for batching jobs
             self.plot = self._plot
             self.summary_data_frame = self._summary_data_frame
+    
+    def _is_succeeded(self):
+        return 'status' in self and self['status'] == "success"
 
     def data(self, idx: Optional[int] = None) -> Any:
         """
@@ -275,19 +280,22 @@ class MicrosoftEstimatorResult(dict):
         labels = labels[:len(self)]
 
         def get_row(result):
-            formatted = result["physicalCountsFormatted"]
+            if MicrosoftEstimatorResult._is_succeeded(result):
+                formatted = result["physicalCountsFormatted"]
 
-            return (
-                formatted["algorithmicLogicalQubits"],
-                formatted["logicalDepth"],
-                formatted["numTstates"],
-                result["logicalQubit"]["codeDistance"],
-                formatted["numTfactories"],
-                formatted["physicalQubitsForTfactoriesPercentage"],
-                formatted["physicalQubits"],
-                formatted["rqops"],
-                formatted["runtime"]
-            )
+                return (
+                    formatted["algorithmicLogicalQubits"],
+                    formatted["logicalDepth"],
+                    formatted["numTstates"],
+                    result["logicalQubit"]["codeDistance"],
+                    formatted["numTfactories"],
+                    formatted["physicalQubitsForTfactoriesPercentage"],
+                    formatted["physicalQubits"],
+                    formatted["rqops"],
+                    formatted["runtime"]
+                )
+            else:
+                return ['No solution found'] * 9
 
         data = [get_row(self.data(index)) for index in range(len(self))]
         columns = ["Logical qubits", "Logical depth", "T states",
@@ -402,13 +410,20 @@ class MicrosoftEstimatorResult(dict):
         return html
 
     def _batch_result_table(self, indices):
+        succeeded_item_indices = [i for i in indices if MicrosoftEstimatorResult._is_succeeded(self[i])]
+        if len(succeeded_item_indices) == 0:
+            print("None of the jobs succeeded")
+            return ""
+        
+        first_succeeded_item_index = succeeded_item_indices[0]
+
         html = ""
 
         md = markdown.Markdown(extensions=['mdx_math'])
 
         item_headers = "".join(f"<th>{i}</th>" for i in indices)
 
-        for group_index, group in enumerate(self[0]['reportData']['groups']):
+        for group_index, group in enumerate(self[first_succeeded_item_index]['reportData']['groups']):
             html += f"""
                 <details {"open" if group['alwaysVisible'] else ""}>
                     <summary style="display:list-item">
@@ -419,7 +434,7 @@ class MicrosoftEstimatorResult(dict):
 
             visited_entries = set()
 
-            for entry in [entry for index in indices for entry in self[index]['reportData']['groups'][group_index]['entries']]:
+            for entry in [entry for index in succeeded_item_indices for entry in self[index]['reportData']['groups'][group_index]['entries']]:
                 label = entry['label']
                 if label in visited_entries:
                     continue
@@ -432,12 +447,15 @@ class MicrosoftEstimatorResult(dict):
 
                 for index in indices:
                     val = self[index]
-                    for key in entry['path'].split("/"):
-                        if key in val:
-                            val = val[key]
-                        else:
-                            val = "N/A"
-                            break
+                    if index in succeeded_item_indices:
+                        for key in entry['path'].split("/"):
+                            if key in val:
+                                val = val[key]
+                            else:
+                                val = "N/A"
+                                break
+                    else:
+                        val = "N/A"
                     html += f"""
                             <td style="vertical-align: top; white-space: nowrap">{val}</td>
                     """
@@ -448,13 +466,16 @@ class MicrosoftEstimatorResult(dict):
             html += "</table></details>"
 
         html += f"<details><summary style=\"display:list-item\"><strong>Assumptions</strong></summary><ul>"
-        for assumption in self[0]['reportData']['assumptions']:
+        for assumption in self[first_succeeded_item_index]['reportData']['assumptions']:
             html += f"<li>{md.convert(assumption)}</li>"
         html += "</ul></details>"
 
         return html
 
-
+    @staticmethod
+    def _is_succeeded(obj):
+        return 'status' in obj and obj['status'] == "success"
+    
 class EstimatorResultDiagram:
     def __init__(self, data):
         data.pop("reportData")
